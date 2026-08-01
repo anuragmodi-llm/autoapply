@@ -10,7 +10,7 @@
   "use strict";
 
   const LOG_PREFIX = "[AutoApply]";
-  const BACKEND_URL = "http://localhost:3001";
+  const BACKEND_URL = "https://autoapply-beryl.vercel.app";
   const OVERLAY_ID = "autoapply-overlay";
   const MAX_DYNAMIC_ROUNDS = 3;
   const MAX_BACKOFF_RETRIES = 3;
@@ -56,12 +56,17 @@
       const tag = el.tagName.toLowerCase();
       if (tag === "textarea") return "textarea";
       if (tag === "select") return "select";
+      if (el.getAttribute("role") === "combobox") return "select";
       if (tag === "input") return (el.getAttribute("type") || "text").toLowerCase();
       if (el.getAttribute("contenteditable") === "true") return "richtext";
       return "text";
     },
     getOptions(el) {
       if (el.tagName.toLowerCase() === "select") return Array.from(el.options).filter(o => o.value && !o.disabled).map(o => o.textContent.trim());
+      if (el.getAttribute("role") === "combobox") {
+        const listboxId = el.getAttribute("aria-controls") || el.getAttribute("aria-owns");
+        if (listboxId) { const lb = document.getElementById(listboxId); if (lb) return Array.from(lb.querySelectorAll("[role='option']")).map(o => o.textContent.trim()).filter(Boolean); }
+      }
       if (el.type === "radio" && el.name) return Array.from(document.querySelectorAll(`input[type="radio"][name="${CSS.escape(el.name)}"]`)).map(r => this.getLabel(r) || r.value);
       return [];
     },
@@ -85,8 +90,8 @@
   const greenhouseAdapter = {
     ...genericAdapter, name: "greenhouse",
     selectors: {
-      form: "#application_form, .application-form, #main_fields",
-      field: "#application_form input, #application_form textarea, #application_form select, .application-form input, .application-form textarea, .application-form select, #main_fields input, #main_fields textarea, #main_fields select, .field input, .field textarea, .field select",
+      form: "#application_form, .application-form, #main_fields, form",
+      field: "form input, form textarea, form select, form [role='combobox'], #application_form input, #application_form textarea, #application_form select, .application-form input, .application-form textarea, .application-form select",
     },
     matches() { return location.hostname.includes("greenhouse.io") || !!document.querySelector("#application_form, .application-form"); },
     getLabel(el) {

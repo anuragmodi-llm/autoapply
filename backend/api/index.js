@@ -1,8 +1,11 @@
 import { createApp } from "../src/app.js";
 
-const app = await createApp();
+let app;
 
 export default async function handler(req, res) {
-  await app.ready();
+  if (!app) {
+    app = await createApp();
+    await app.ready();
+  }
   app.server.emit("request", req, res);
 }

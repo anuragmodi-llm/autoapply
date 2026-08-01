@@ -4,7 +4,7 @@
 
 import * as log from "./logger.js";
 
-const BACKEND_URL = "http://localhost:3001";
+const BACKEND_URL = "https://autoapply-beryl.vercel.app";
 const DEFAULT_TIMEOUT = 30000;
 const MAX_RETRIES = 1;
 

@@ -9,7 +9,7 @@ import * as log from "../lib/logger.js";
 const $ = (sel) => document.querySelector(sel);
 
 const SUPPORTED_PATTERNS = [
-  /^https:\/\/boards\.greenhouse\.io\//,
+  /^https:\/\/[^/]*\.greenhouse\.io\//,
   /^https:\/\/jobs\.lever\.co\//,
 ];
 
@@ -95,6 +95,14 @@ async function handleAutofill() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) throw new Error("No active tab found.");
+
+    // Inject content script programmatically in case declarative injection didn't fire
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ["content/content-script.js"],
+      });
+    } catch { /* already injected or no permission — ok, try sending anyway */ }
 
     const response = await chrome.tabs.sendMessage(tab.id, { action: "startAutofill" });
     if (response?.error) {

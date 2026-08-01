@@ -14,16 +14,12 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
   .map((s) => s.trim())
   .filter(Boolean);
 
-export async function createApp() {
-  const app = Fastify({
-    logger: {
-      level: "info",
-      transport: {
-        target: "pino-pretty",
-        options: { translateTime: "HH:MM:ss", ignore: "pid,hostname" },
-      },
-    },
-  });
+export async function createApp({ pretty = false } = {}) {
+  const loggerConfig = pretty
+    ? { level: "info", transport: { target: "pino-pretty", options: { translateTime: "HH:MM:ss", ignore: "pid,hostname" } } }
+    : { level: "info" };
+
+  const app = Fastify({ logger: loggerConfig });
 
   await app.register(cors, {
     origin: (origin, cb) => {
