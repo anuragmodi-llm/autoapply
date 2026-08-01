@@ -1,0 +1,175 @@
+/* AutoApply Popup */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  color: #1f2937;
+  -webkit-font-smoothing: antialiased;
+  width: 320px;
+}
+
+.popup {
+  padding: 16px;
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.popup-header h1 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -0.01em;
+}
+
+.state {
+  text-align: center;
+}
+
+.state-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.state-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+.state-desc {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #2563eb;
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.btn-secondary {
+  background: #fff;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.btn-full {
+  width: 100%;
+}
+
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.unlock-form {
+  text-align: left;
+}
+
+.unlock-form input {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-family: inherit;
+  margin-bottom: 8px;
+}
+
+.unlock-form input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.error-text {
+  color: #ef4444;
+  font-size: 12px;
+  min-height: 16px;
+  margin-bottom: 4px;
+}
+
+.current-tab {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  text-align: left;
+}
+
+.tab-label {
+  font-size: 11px;
+  color: #6b7280;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.tab-url {
+  font-size: 12px;
+  color: #374151;
+  word-break: break-all;
+  display: block;
+}
+
+.hint {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 8px;
+}
+
+.usage-counter {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 10px;
+  text-align: center;
+}
+
+.actions-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  justify-content: center;
+}

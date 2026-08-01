@@ -1,0 +1,79 @@
+{
+  "fields": [
+    {
+      "id": "first_name",
+      "label": "First Name",
+      "type": "text",
+      "placeholder": "Enter your first name"
+    },
+    {
+      "id": "last_name",
+      "label": "Last Name",
+      "type": "text",
+      "placeholder": "Enter your last name"
+    },
+    {
+      "id": "email",
+      "label": "Email Address",
+      "type": "email",
+      "placeholder": "you@example.com"
+    },
+    {
+      "id": "phone",
+      "label": "Phone Number",
+      "type": "tel"
+    },
+    {
+      "id": "how_heard",
+      "label": "How did you hear about us?",
+      "type": "select",
+      "options": ["LinkedIn", "Job Board", "Referral", "Company Website", "Other"]
+    },
+    {
+      "id": "cover_letter",
+      "label": "Why are you interested in this role?",
+      "type": "textarea",
+      "context": "Application for Senior Software Engineer at TechCorp"
+    }
+  ],
+  "profile": {
+    "personal": {
+      "name": "Anurag Modi",
+      "email": "anurag@example.com",
+      "phone": "+91 98765 43210",
+      "location": "Mumbai, India",
+      "linkedin": "https://linkedin.com/in/anuragmodi",
+      "company": "IDfy",
+      "role": "Product Manager"
+    },
+    "experience": [
+      {
+        "company": "IDfy",
+        "role": "Product Manager",
+        "start_date": "Jan 2023",
+        "end_date": "Present",
+        "description": "Led privacy and consent governance platform development, building Privy from 0 to 1.",
+        "achievements": ["Launched consent artefact framework", "Built vendor 360 risk assessment"]
+      }
+    ],
+    "skills": {
+      "technical": ["JavaScript", "Python", "React", "Node.js"],
+      "soft": ["Leadership", "Cross-functional collaboration"]
+    },
+    "qa_bank": [
+      {
+        "question_pattern": "Why are you interested in this role?",
+        "answer": "I'm drawn to roles where I can combine product thinking with deep technical challenges. Building privacy-first products at IDfy has given me a strong foundation in compliance tech, and I'm excited to bring that perspective to a new engineering challenge."
+      }
+    ],
+    "preferences": {
+      "willing_to_relocate": "yes",
+      "remote_preference": "hybrid"
+    }
+  },
+  "jobContext": {
+    "jobTitle": "Senior Software Engineer",
+    "company": "TechCorp",
+    "description": "We're looking for a Senior Software Engineer to join our platform team. You'll be building distributed systems, working with React and Node.js, and collaborating across teams."
+  }
+}

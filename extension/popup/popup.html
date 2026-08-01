@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoApply</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup">
+    <header class="popup-header">
+      <h1>AutoApply</h1>
+    </header>
+
+    <!-- State: Not set up -->
+    <div id="state-setup" class="state" style="display:none;">
+      <div class="state-icon">&#x1F6E0;</div>
+      <p class="state-title">Profile Not Set Up</p>
+      <p class="state-desc">Create your profile to start auto-filling applications.</p>
+      <button id="btn-open-options" class="btn btn-primary btn-full">Set Up Profile</button>
+    </div>
+
+    <!-- State: Ready -->
+    <div id="state-ready" class="state" style="display:none;">
+      <div class="state-icon">&#x2705;</div>
+      <p class="state-title">Profile Ready</p>
+      <div class="current-tab">
+        <span class="tab-label">Current tab:</span>
+        <span id="current-url" class="tab-url">—</span>
+      </div>
+      <button id="btn-autofill" class="btn btn-primary btn-full" disabled>
+        Autofill This Page
+      </button>
+      <p id="autofill-hint" class="hint">Works on Greenhouse and Lever application pages.</p>
+      <p id="usage-counter" class="usage-counter"></p>
+      <div class="actions-row">
+        <button id="btn-edit-profile" class="btn btn-secondary btn-sm">Edit Profile</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>

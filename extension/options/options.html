@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoApply — Profile Setup</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="header-left">
+        <h1 class="logo">AutoApply</h1>
+        <span class="badge">Profile Setup</span>
+      </div>
+      <div class="header-right">
+        <span id="save-status" class="save-status"></span>
+        <button id="btn-export" class="btn btn-secondary">Export</button>
+        <button id="btn-import" class="btn btn-secondary">Import</button>
+        <button id="btn-save" class="btn btn-primary" disabled>Save Profile</button>
+        <button id="btn-clear" class="btn btn-danger-outline">Clear All</button>
+        <input type="file" id="import-file" accept=".json" style="display:none">
+      </div>
+    </header>
+
+    <div class="profile-form">
+      <nav class="sidebar">
+        <a href="#section-personal" class="nav-link active" data-section="personal">Personal</a>
+        <a href="#section-experience" class="nav-link" data-section="experience">Experience</a>
+        <a href="#section-education" class="nav-link" data-section="education">Education</a>
+        <a href="#section-skills" class="nav-link" data-section="skills">Skills</a>
+        <a href="#section-qa" class="nav-link" data-section="qa">Q&A Bank</a>
+        <a href="#section-preferences" class="nav-link" data-section="preferences">Preferences</a>
+      </nav>
+
+      <main class="content">
+        <!-- PERSONAL -->
+        <section id="section-personal" class="section">
+          <h2>Personal Information</h2>
+          <div class="grid-2">
+            <div class="field">
+              <label for="personal-name">Full Name *</label>
+              <input type="text" id="personal-name" placeholder="John Doe">
+            </div>
+            <div class="field">
+              <label for="personal-email">Email *</label>
+              <input type="email" id="personal-email" placeholder="john@example.com">
+            </div>
+            <div class="field">
+              <label for="personal-phone">Phone</label>
+              <input type="tel" id="personal-phone" placeholder="+1 555-123-4567">
+            </div>
+            <div class="field">
+              <label for="personal-location">Location</label>
+              <input type="text" id="personal-location" placeholder="San Francisco, CA">
+            </div>
+            <div class="field">
+              <label for="personal-linkedin">LinkedIn URL</label>
+              <input type="url" id="personal-linkedin" placeholder="https://linkedin.com/in/johndoe">
+            </div>
+            <div class="field">
+              <label for="personal-github">GitHub URL</label>
+              <input type="url" id="personal-github" placeholder="https://github.com/johndoe">
+            </div>
+            <div class="field">
+              <label for="personal-portfolio">Portfolio URL</label>
+              <input type="url" id="personal-portfolio" placeholder="https://johndoe.dev">
+            </div>
+            <div class="field">
+              <label for="personal-company">Current Company</label>
+              <input type="text" id="personal-company" placeholder="Acme Corp">
+            </div>
+            <div class="field">
+              <label for="personal-role">Current Role</label>
+              <input type="text" id="personal-role" placeholder="Senior Software Engineer">
+            </div>
+            <div class="field">
+              <label for="personal-notice">Notice Period</label>
+              <input type="text" id="personal-notice" placeholder="30 days">
+            </div>
+            <div class="field">
+              <label for="personal-ctc">Current CTC</label>
+              <input type="text" id="personal-ctc" placeholder="$150,000">
+            </div>
+            <div class="field">
+              <label for="personal-expected-ctc">Expected CTC</label>
+              <input type="text" id="personal-expected-ctc" placeholder="$180,000">
+            </div>
+            <div class="field full-width">
+              <label for="personal-work-auth">Work Authorization Status</label>
+              <select id="personal-work-auth">
+                <option value="">Select...</option>
+                <option value="citizen">Citizen</option>
+                <option value="permanent_resident">Permanent Resident</option>
+                <option value="work_visa">Work Visa (H1B, L1, etc.)</option>
+                <option value="student_visa">Student Visa (F1/OPT)</option>
+                <option value="need_sponsorship">Need Sponsorship</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <!-- EXPERIENCE -->
+        <section id="section-experience" class="section">
+          <div class="section-header">
+            <h2>Work Experience</h2>
+            <button id="btn-add-exp" class="btn btn-secondary btn-sm">+ Add Experience</button>
+          </div>
+          <div id="experience-list" class="entry-list"></div>
+        </section>
+
+        <!-- EDUCATION -->
+        <section id="section-education" class="section">
+          <div class="section-header">
+            <h2>Education</h2>
+            <button id="btn-add-edu" class="btn btn-secondary btn-sm">+ Add Education</button>
+          </div>
+          <div id="education-list" class="entry-list"></div>
+        </section>
+
+        <!-- SKILLS -->
+        <section id="section-skills" class="section">
+          <h2>Skills</h2>
+          <div class="grid-1">
+            <div class="field">
+              <label for="skills-technical">Technical Skills</label>
+              <textarea id="skills-technical" rows="3" placeholder="JavaScript, Python, React, Node.js, PostgreSQL, Docker..."></textarea>
+              <span class="hint">Comma-separated</span>
+            </div>
+            <div class="field">
+              <label for="skills-soft">Soft Skills</label>
+              <textarea id="skills-soft" rows="3" placeholder="Leadership, Communication, Problem-solving..."></textarea>
+              <span class="hint">Comma-separated</span>
+            </div>
+            <div class="field">
+              <label for="skills-tools">Tools & Platforms</label>
+              <textarea id="skills-tools" rows="3" placeholder="AWS, GCP, Jira, Figma, VS Code..."></textarea>
+              <span class="hint">Comma-separated</span>
+            </div>
+            <div class="field">
+              <label for="skills-languages">Languages</label>
+              <textarea id="skills-languages" rows="2" placeholder="English (native), Spanish (conversational)..."></textarea>
+              <span class="hint">Comma-separated</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Q&A BANK -->
+        <section id="section-qa" class="section">
+          <div class="section-header">
+            <h2>Q&A Bank</h2>
+            <button id="btn-add-qa" class="btn btn-secondary btn-sm">+ Add Q&A</button>
+          </div>
+          <p class="section-desc">Pre-written answers for common application questions. The AI will adapt these to each specific job.</p>
+          <div id="qa-list" class="entry-list"></div>
+        </section>
+
+        <!-- PREFERENCES -->
+        <section id="section-preferences" class="section">
+          <h2>Preferences</h2>
+          <div class="grid-2">
+            <div class="field">
+              <label for="pref-relocate">Willing to Relocate?</label>
+              <select id="pref-relocate">
+                <option value="">Select...</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="pref-remote">Remote Preference</label>
+              <select id="pref-remote">
+                <option value="">Select...</option>
+                <option value="remote">Remote Only</option>
+                <option value="hybrid">Hybrid</option>
+                <option value="onsite">Onsite</option>
+                <option value="any">Any</option>
+              </select>
+            </div>
+            <div class="field full-width">
+              <label for="pref-locations">Preferred Locations</label>
+              <input type="text" id="pref-locations" placeholder="San Francisco, New York, Remote...">
+              <span class="hint">Comma-separated</span>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="options.js" type="module"></script>
+</body>
+</html>
