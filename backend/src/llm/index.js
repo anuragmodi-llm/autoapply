@@ -10,7 +10,7 @@ import { buildPrompt as buildFieldMapping } from "./prompts/field-mapping.js";
 import { buildPrompt as buildFreetextAnswer } from "./prompts/freetext-answer.js";
 import { buildPrompt as buildResumeParse } from "./prompts/resume-parse.js";
 
-const SIMPLE_TYPES = new Set(["text", "email", "tel", "url", "number", "select", "radio", "checkbox", "date"]);
+const SIMPLE_TYPES = new Set(["text", "email", "tel", "url", "number", "select", "radio", "checkbox", "date", "yesno"]);
 const MAX_CONCURRENT_COMPLEX = 5;
 const RATE_LIMIT_RETRY_DELAY_MS = 2000;
 

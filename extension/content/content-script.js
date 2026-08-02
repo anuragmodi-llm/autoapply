@@ -156,6 +156,126 @@
     },
   };
 
+  /* ========== Ashby Adapter ========== */
+
+  // Ashby has no <form> element — the whole application lives inside
+  // .ashby-application-form-container. Custom field ids are unpredictable
+  // (UUIDs or question_<n>), so fields must be found by label text, not id.
+  // Yes/No questions render as clickable <button> pairs backed by a hidden
+  // checkbox — clicking the checkbox directly doesn't trigger React state,
+  // so they get their own "yesno" field type/fill path.
+  const ashbyAdapter = {
+    ...genericAdapter, name: "ashby",
+    selectors: {
+      form: "#form[role='tabpanel'], .ashby-application-form-container",
+      field: ".ashby-application-form-field-entry input, .ashby-application-form-field-entry textarea, .ashby-application-form-field-entry select",
+    },
+    matches() { return location.hostname.includes("ashbyhq.com") || !!document.querySelector(".ashby-application-form-container"); },
+    getLabel(el) {
+      // Some fields nest a distinct sub-question inside a parent field's
+      // wrapper (e.g. an SMS-consent Yes/No radio living inside the Phone
+      // field's .ashby-application-form-field-entry) — its own description
+      // text is a better label than the parent's shared question title.
+      if ((el.type === "radio" || el.type === "checkbox") && el.name) {
+        const desc = el.closest("[class*='-description']");
+        if (desc) {
+          const p = desc.querySelector("p");
+          if (p) { const t = p.textContent.trim(); if (t) return t.length > 140 ? t.slice(0, 140) + "…" : t; }
+        }
+      }
+      // Otherwise prefer the field/fieldset-level question text over an
+      // individual radio/checkbox option's own <label for>, so the whole
+      // group shares one meaningful label instead of each option overriding it.
+      const entry = el.closest(".ashby-application-form-field-entry");
+      if (entry) {
+        const l = entry.querySelector("label.ashby-application-form-question-title");
+        if (l) { const t = cleanLabel(l); if (t) return t; }
+      }
+      return genericAdapter.getLabel(el);
+    },
+    getContext(el) {
+      const p = [];
+      const s = el.closest(".ashby-application-form-section-container");
+      if (s) { const h = s.querySelector(".ashby-application-form-section-header"); if (h) p.push(h.textContent.trim()); }
+      // Multi-select checkbox groups share one question label across options —
+      // include the option's own text so the AI can tell them apart.
+      if (el.type === "checkbox" && el.closest("fieldset") && el.id) {
+        const optLabel = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+        if (optLabel) p.push(`Option: ${cleanLabel(optLabel)}`);
+      }
+      const g = genericAdapter.getContext(el); if (g) p.push(g);
+      return p.join(" > ");
+    },
+    getFieldType(el) {
+      if (el.closest("[class*='_yesno']")) return "yesno";
+      return genericAdapter.getFieldType(el);
+    },
+    getOptions(el) {
+      if (el.closest("[class*='_yesno']")) return ["Yes", "No"];
+      if (el.type === "radio" && el.name) {
+        return Array.from(document.querySelectorAll(`input[type="radio"][name="${CSS.escape(el.name)}"]`))
+          .map(r => { const l = document.querySelector(`label[for="${CSS.escape(r.id)}"]`) || r.closest("label"); return l ? cleanLabel(l) : r.value; });
+      }
+      if (el.type === "checkbox" && el.closest("fieldset")) {
+        const fs = el.closest("fieldset");
+        return Array.from(fs.querySelectorAll('input[type="checkbox"]'))
+          .map(c => { const l = document.querySelector(`label[for="${CSS.escape(c.id)}"]`) || c.closest("label"); return l ? cleanLabel(l) : c.name; });
+      }
+      return genericAdapter.getOptions(el);
+    },
+  };
+
+  /* ========== Workday Adapter ========== */
+
+  // Based on Workday's well-documented, platform-wide DOM conventions
+  // (data-automation-id attributes are identical across every Workday
+  // tenant since it's the same underlying product) rather than a
+  // live-verified page — every Workday career site we tried gates the
+  // actual form behind a mandatory account creation/sign-in step, which
+  // this tool won't do on the user's behalf. Expect to refine this once
+  // tested against a real logged-in session.
+  //
+  // Known quirks handled here:
+  // - Custom dropdowns are a <button aria-haspopup="listbox"> whose options
+  //   render into the DOM (often via a portal) only once opened — options
+  //   are resolved live by fillCustomDropdown() at fill time, not upfront.
+  // - Workday's account-creation step ships a hidden honeypot input
+  //   ("...this input is for robots only...") — explicitly skipped.
+  // - Multi-step wizard: this only fills whatever step is currently showing.
+  //   The user re-runs Autofill after each "Save and Continue".
+  const workdayAdapter = {
+    ...genericAdapter, name: "workday",
+    selectors: {
+      form: "[data-automation-id='jobApplication'], form, [role='main']",
+      field: "input, textarea, select, button[aria-haspopup='listbox'], [aria-haspopup='listbox']",
+    },
+    matches() { return location.hostname.includes("myworkdayjobs.com") || document.querySelectorAll("[data-automation-id]").length > 5; },
+    getLabel(el) {
+      if (el.id) { const l = document.querySelector(`label[for="${CSS.escape(el.id)}"]`); if (l) { const t = cleanLabel(l); if (t) return t.replace(/\*\s*$/, "").trim(); } }
+      const container = el.closest("[data-automation-id]");
+      if (container) { const l = container.querySelector("label"); if (l) { const t = cleanLabel(l); if (t) return t.replace(/\*\s*$/, "").trim(); } }
+      return genericAdapter.getLabel(el).replace(/\*\s*$/, "").trim();
+    },
+    getFieldType(el) {
+      const aria = (el.getAttribute("aria-label") || "").toLowerCase();
+      if (/robot|honeypot|do not enter/.test(aria)) return "hidden";
+      if (el.id) { const l = document.querySelector(`label[for="${CSS.escape(el.id)}"]`); if (l && /robot|honeypot|do not enter/i.test(l.textContent)) return "hidden"; }
+      if (el.getAttribute("aria-haspopup") === "listbox") return "select";
+      return genericAdapter.getFieldType(el);
+    },
+    getOptions(el) {
+      if (el.getAttribute("aria-haspopup") === "listbox") {
+        const listboxId = el.getAttribute("aria-controls") || el.getAttribute("aria-owns");
+        if (listboxId) {
+          const lb = document.getElementById(listboxId);
+          if (lb) { const opts = Array.from(lb.querySelectorAll("[role='option']")).map(o => o.textContent.trim()).filter(Boolean); if (opts.length) return opts; }
+        }
+        return []; // Unopened — resolved live by fillCustomDropdown() instead.
+      }
+      return genericAdapter.getOptions(el);
+    },
+  };
+
   /* ========== Helpers ========== */
 
   function cleanLabel(el) {
@@ -167,6 +287,8 @@
   function detectAdapter() {
     if (greenhouseAdapter.matches()) return greenhouseAdapter;
     if (leverAdapter.matches()) return leverAdapter;
+    if (ashbyAdapter.matches()) return ashbyAdapter;
+    if (workdayAdapter.matches()) return workdayAdapter;
     return genericAdapter;
   }
 
@@ -247,6 +369,7 @@
         case "select": return el.tagName.toLowerCase() === "select" ? fillNativeSelect(el, value) : await fillCustomDropdown(el, value);
         case "radio": return fillRadio(el, value);
         case "checkbox": return fillCheckbox(el, value);
+        case "yesno": return fillYesNo(el, value);
         case "textarea": await typeText(el, value, 10, 30); return { status: "filled" };
         case "richtext":
           el.focus(); el.innerHTML = "";
@@ -344,6 +467,20 @@
     const should = /^(true|yes|1|on|checked)$/i.test(String(value));
     if (el.checked !== should) el.click();
     return { status: "filled" };
+  }
+
+  // Ashby-style Yes/No questions: a hidden checkbox tracks state, but the
+  // visible, React-wired control is a pair of <button> elements — clicking
+  // the checkbox directly wouldn't update React's state.
+  function fillYesNo(el, value) {
+    const container = el.closest("[class*='_yesno']");
+    if (!container) return { status: "error", message: "Yes/No container not found" };
+    const lower = String(value).trim().toLowerCase();
+    const buttons = container.querySelectorAll("button");
+    for (const btn of buttons) {
+      if (btn.textContent.trim().toLowerCase() === lower) { btn.click(); return { status: "filled" }; }
+    }
+    return { status: "review", message: "No matching Yes/No option" };
   }
 
   /* ========== Validation Error Scanner ========== */
