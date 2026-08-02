@@ -161,6 +161,8 @@
       if (SKIP_TYPES.has(type)) continue;
       if (el.disabled || el.readOnly) continue;
       if (el.offsetParent === null && type !== "hidden") continue;
+      if (el.getAttribute("aria-hidden") === "true") continue;
+      if (el.tabIndex === -1 && !el.id && !el.name) continue;
 
       if (type === "radio") { const k = `radio:${el.name}`; if (seen.has(k)) continue; seen.add(k); }
       const id = adapter.getStableSelector(el);
