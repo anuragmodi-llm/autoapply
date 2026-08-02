@@ -307,9 +307,12 @@
       const type = adapter.getFieldType(el);
       if (SKIP_TYPES.has(type)) continue;
       if (el.disabled || el.readOnly) continue;
-      if (el.offsetParent === null && type !== "hidden") continue;
+      // File inputs are almost always visually hidden behind a custom
+      // "drop zone" UI (Ashby, Workday, etc.) — DataTransfer-based filling
+      // works fine on an invisible input, so don't filter these out.
+      if (el.offsetParent === null && type !== "hidden" && type !== "file") continue;
       if (el.getAttribute("aria-hidden") === "true") continue;
-      if (el.tabIndex === -1 && !el.id && !el.name) continue;
+      if (el.tabIndex === -1 && !el.id && !el.name && type !== "file") continue;
 
       if (type === "radio") { const k = `radio:${el.name}`; if (seen.has(k)) continue; seen.add(k); }
       const id = adapter.getStableSelector(el);
