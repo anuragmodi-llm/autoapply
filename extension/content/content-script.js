@@ -16,6 +16,29 @@
   const MAX_BACKOFF_RETRIES = 3;
   const MAX_RUN_LOGS = 30;
   const RUN_LOGS_KEY = "autoapply_logs";
+  const FIELD_RULES_KEY = "autoapply_field_rules";
+  const DIRECT_MAP_TYPES = new Set(["text", "email", "tel", "url"]);
+
+  // Default direct-mapping rules — editable from the options page's "Field
+  // Mapping Rules" section (chrome.storage.local key: autoapply_field_rules).
+  // Adding a new fixed field takes effect on the next autofill run, no
+  // extension reload or backend deploy needed.
+  const DEFAULT_FIELD_RULES = [
+    { keywords: "first name, given name", profileField: "personal.name", transform: "firstName" },
+    { keywords: "last name, surname, family name", profileField: "personal.name", transform: "lastName" },
+    { keywords: "full name, your name, candidate name, applicant name", profileField: "personal.name" },
+    { keywords: "email", profileField: "personal.email" },
+    { keywords: "phone, mobile, contact number, telephone", profileField: "personal.phone" },
+    { keywords: "linkedin", profileField: "personal.linkedin" },
+    { keywords: "github", profileField: "personal.github" },
+    { keywords: "portfolio, personal website, personal site", profileField: "personal.portfolio" },
+    { keywords: "current company, employer name, current employer", profileField: "personal.company" },
+    { keywords: "current title, current role, current position, job title", profileField: "personal.role" },
+    { keywords: "notice period", profileField: "personal.notice_period" },
+    { keywords: "current ctc, current salary, current compensation", profileField: "personal.current_ctc" },
+    { keywords: "expected ctc, expected salary, desired salary", profileField: "personal.expected_ctc" },
+    { keywords: "location, city, current location, based in, address", profileField: "personal.location" },
+  ];
 
   let fillInProgress = false;
   let abortController = null;
@@ -442,6 +465,58 @@
     return ctx;
   }
 
+  /* ========== Direct Field Mapping (no AI) ========== */
+
+  function getByPath(obj, path) {
+    return path.split(".").reduce((o, key) => (o == null ? undefined : o[key]), obj);
+  }
+
+  function applyTransform(value, transform) {
+    if (!value) return value;
+    if (transform === "firstName") return value.trim().split(/\s+/)[0] || "";
+    if (transform === "lastName") { const parts = value.trim().split(/\s+/); return parts.length > 1 ? parts.slice(1).join(" ") : ""; }
+    return value;
+  }
+
+  function normalizeFieldLabel(label) {
+    return (label || "").toLowerCase().replace(/[*:]/g, "").replace(/\(optional\)/g, "").trim();
+  }
+
+  async function getFieldRules() {
+    const result = await chrome.storage.local.get(FIELD_RULES_KEY);
+    return result[FIELD_RULES_KEY] || DEFAULT_FIELD_RULES;
+  }
+
+  /**
+   * Splits fields into direct fills (matched against local rules, no AI)
+   * and remaining fields that still need the LLM.
+   */
+  function directMapFields(fields, profile, rules) {
+    const directFills = [];
+    const remainingFields = [];
+
+    for (const field of fields) {
+      if (!DIRECT_MAP_TYPES.has(field.type) || field.options?.length) {
+        remainingFields.push(field);
+        continue;
+      }
+
+      const label = normalizeFieldLabel(field.label);
+      const rule = rules.find((r) => r.keywords.split(",").map((k) => k.trim().toLowerCase()).some((k) => k && label.includes(k)));
+
+      if (!rule) { remainingFields.push(field); continue; }
+
+      let value = getByPath(profile, rule.profileField);
+      if (rule.transform) value = applyTransform(value, rule.transform);
+
+      if (!value) { remainingFields.push(field); continue; }
+
+      directFills.push({ id: field.id, label: field.label, value });
+    }
+
+    return { directFills, remainingFields };
+  }
+
   /* ========== Main Autofill Flow ========== */
 
   async function runAutofill() {
@@ -461,6 +536,8 @@
 
       const trimmedProfile = { ...profile };
       if (trimmedProfile.experience?.length > 5) trimmedProfile.experience = trimmedProfile.experience.slice(0, 5);
+
+      const fieldRules = await getFieldRules();
 
       await waitForDynamicFields(2000);
       const adapter = detectAdapter();
@@ -491,7 +568,7 @@
         // File inputs (resume/cover letter attach) never need the LLM —
         // handle them locally so we don't waste an AI call on an "Attach" button.
         const fileFields = fields.filter((f) => f.type === "file");
-        const llmFields = fields.filter((f) => f.type !== "file");
+        const nonFileFields = fields.filter((f) => f.type !== "file");
 
         for (const f of fileFields) {
           allFilledIds.add(f.id);
@@ -500,6 +577,21 @@
           if (res.status === "filled") { updateFieldUI(f.id, f.label, "filled", res.message); totalFilled++; }
           else if (res.status === "skipped") { updateFieldUI(f.id, f.label, "skipped", res.message); totalSkipped++; }
           else { updateFieldUI(f.id, f.label, "error", res.message); totalErrors++; }
+        }
+
+        // Fixed personal fields (name, email, phone, etc.) matched against
+        // locally-stored rules — filled instantly, no AI call, no round trip.
+        const { directFills, remainingFields: llmFields } = directMapFields(nonFileFields, trimmedProfile, fieldRules);
+
+        if (directFills.length > 0) {
+          runDebugCalls.push({ stage: "direct", fieldIds: directFills.map((f) => f.id), latencyMs: 0 });
+          for (const f of directFills) {
+            allFilledIds.add(f.id);
+            updateFieldUI(f.id, f.label, "filling");
+            const res = await fillField(f.id, f.value, "text", resumeFile);
+            if (res.status === "filled") { updateFieldUI(f.id, f.label, "filled", "Direct-mapped — no AI used"); totalFilled++; }
+            else { updateFieldUI(f.id, f.label, "error", res.message); totalErrors++; }
+          }
         }
 
         if (llmFields.length === 0) {

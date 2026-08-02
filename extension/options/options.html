@@ -32,6 +32,7 @@
         <a href="#section-skills" class="nav-link" data-section="skills">Skills</a>
         <a href="#section-qa" class="nav-link" data-section="qa">Q&A Bank</a>
         <a href="#section-preferences" class="nav-link" data-section="preferences">Preferences</a>
+        <a href="#section-field-rules" class="nav-link" data-section="field-rules">Field Mapping Rules</a>
       </nav>
 
       <main class="content">
@@ -202,6 +203,21 @@
               <span class="hint">Comma-separated</span>
             </div>
           </div>
+        </section>
+
+        <!-- FIELD MAPPING RULES -->
+        <section id="section-field-rules" class="section">
+          <div class="section-header">
+            <h2>Field Mapping Rules</h2>
+            <div style="display:flex; gap:8px;">
+              <button id="btn-reset-rules" class="btn btn-secondary btn-sm">Reset to Defaults</button>
+              <button id="btn-add-rule" class="btn btn-secondary btn-sm">+ Add Rule</button>
+              <button id="btn-save-rules" class="btn btn-primary btn-sm">Save Rules</button>
+            </div>
+          </div>
+          <p class="section-desc">Form fields whose label matches any of these keywords get filled straight from your profile — no AI call, no network round trip. Add a new rule here any time; it applies on the very next autofill, no extension reload or backend changes needed. Fields that don't match any rule (dropdowns, radios, freeform questions) still go through the AI.</p>
+          <div id="rules-save-status" class="save-status"></div>
+          <div id="field-rules-list" class="entry-list"></div>
         </section>
       </main>
     </div>

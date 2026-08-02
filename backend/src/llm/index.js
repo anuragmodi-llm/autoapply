@@ -1,10 +1,11 @@
 /**
  * LLM router — reads config, loads the matching provider adapter,
- * splits fields into direct/simple/complex batches, and merges results.
+ * splits fields into simple/complex batches, and merges results.
+ * Direct (no-AI) mapping of fixed personal fields happens client-side in
+ * the extension, so it can be edited without redeploying this backend.
  */
 
 import { LLM_CONFIG } from "./config.js";
-import { mapDirectFields } from "./direct-mapper.js";
 import { buildPrompt as buildFieldMapping } from "./prompts/field-mapping.js";
 import { buildPrompt as buildFreetextAnswer } from "./prompts/freetext-answer.js";
 import { buildPrompt as buildResumeParse } from "./prompts/resume-parse.js";
@@ -94,9 +95,8 @@ async function parseWithRetry(content, messages, responseSchema) {
 }
 
 /**
- * Processes a batch of form fields.
- * Fixed personal fields are mapped directly from the profile with no LLM
- * call; everything else (dropdowns, radios, freetext) goes through the LLM.
+ * Processes a batch of form fields through the LLM.
+ * Splits into simple (batched) and complex (parallel) calls.
  * @param {object} params
  * @param {Array<object>} params.fields
  * @param {object} params.profile
@@ -104,12 +104,10 @@ async function parseWithRetry(content, messages, responseSchema) {
  * @returns {Promise<{fills: Array, errors: Array, meta: object, debug: Array}>}
  */
 export async function processFields({ fields, profile, jobContext }) {
-  const { directFills, remainingFields, debug: directDebug } = mapDirectFields(fields, profile);
-
   const simpleFields = [];
   const complexFields = [];
 
-  for (const field of remainingFields) {
+  for (const field of fields) {
     if (SIMPLE_TYPES.has(field.type) && field.type !== "textarea") {
       simpleFields.push(field);
     } else {
@@ -117,9 +115,9 @@ export async function processFields({ fields, profile, jobContext }) {
     }
   }
 
-  const fills = [...directFills];
+  const fills = [];
   const errors = [];
-  const debug = [...directDebug];
+  const debug = [];
   let totalUsage = { prompt_tokens: 0, completion_tokens: 0 };
   let usedProvider = LLM_CONFIG.provider;
   let usedModel = LLM_CONFIG.model;

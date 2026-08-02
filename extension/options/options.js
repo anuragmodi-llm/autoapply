@@ -4,7 +4,7 @@
  * (experience, education, Q&A).
  */
 
-import { saveProfile, getProfile, clearProfile, saveResumeFile, getResumeFile, clearResumeFile } from "../lib/storage.js";
+import { saveProfile, getProfile, clearProfile, saveResumeFile, getResumeFile, clearResumeFile, getFieldRules, saveFieldRules, DEFAULT_FIELD_RULES } from "../lib/storage.js";
 import * as log from "../lib/logger.js";
 
 const BACKEND_URL = "https://autoapply-beryl.vercel.app";
@@ -23,6 +23,7 @@ const DEFAULT_QA = [
 let experienceEntries = [];
 let educationEntries = [];
 let qaEntries = [];
+let fieldRuleEntries = [];
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -41,12 +42,23 @@ async function init() {
   $("#import-file").addEventListener("change", handleImport);
   $("#resume-file").addEventListener("change", handleResumeUpload);
   $("#btn-remove-resume").addEventListener("click", handleRemoveResume);
+  $("#btn-add-rule").addEventListener("click", () => addFieldRule());
+  $("#btn-reset-rules").addEventListener("click", handleResetRules);
+  $("#btn-save-rules").addEventListener("click", handleSaveRules);
   setupNavigation();
 
   // Enable save button
   $("#btn-save").disabled = false;
 
   showStoredResume(await getResumeFile().catch(() => null));
+
+  try {
+    fieldRuleEntries = (await getFieldRules()).map((r) => ({ ...r }));
+  } catch (err) {
+    log.error("Failed to load field rules:", err);
+    fieldRuleEntries = DEFAULT_FIELD_RULES.map((r) => ({ ...r }));
+  }
+  renderFieldRules();
 
   // Load existing profile or start fresh
   try {
@@ -512,6 +524,110 @@ function collectQAFromDOM() {
     question_pattern: qa.question_pattern.trim(),
     answer: qa.answer.trim(),
   }));
+}
+
+/* ========== Field Mapping Rules ========== */
+
+function renderFieldRules() {
+  const list = $("#field-rules-list");
+  list.innerHTML = "";
+
+  if (fieldRuleEntries.length === 0) {
+    list.innerHTML = '<div class="empty-state">No rules. Click "+ Add Rule" to start.</div>';
+    return;
+  }
+
+  fieldRuleEntries.forEach((rule, i) => {
+    const card = document.createElement("div");
+    card.className = "entry-card";
+    card.innerHTML = `
+      <div class="entry-card-header">
+        <span class="entry-card-title">Rule #${i + 1}</span>
+        <button class="btn-icon btn-remove-rule" data-index="${i}" title="Remove">&#x2715;</button>
+      </div>
+      <div class="grid-1">
+        <div class="field">
+          <label>Label Keywords (comma-separated, case-insensitive)</label>
+          <input type="text" class="rule-keywords" value="${esc(rule.keywords)}" placeholder="first name, given name">
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label>Profile Field (dot path)</label>
+            <input type="text" class="rule-field" value="${esc(rule.profileField)}" placeholder="personal.email">
+          </div>
+          <div class="field">
+            <label>Transform</label>
+            <select class="rule-transform">
+              <option value="" ${!rule.transform ? "selected" : ""}>None</option>
+              <option value="firstName" ${rule.transform === "firstName" ? "selected" : ""}>First word only</option>
+              <option value="lastName" ${rule.transform === "lastName" ? "selected" : ""}>All but first word</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    `;
+    list.appendChild(card);
+  });
+
+  list.querySelectorAll(".btn-remove-rule").forEach((btn) =>
+    btn.addEventListener("click", (e) => {
+      syncFieldRulesFromDOM();
+      fieldRuleEntries.splice(Number(e.target.dataset.index), 1);
+      renderFieldRules();
+    })
+  );
+}
+
+function addFieldRule() {
+  syncFieldRulesFromDOM();
+  fieldRuleEntries.push({ keywords: "", profileField: "", transform: "" });
+  renderFieldRules();
+  scrollToLast("#field-rules-list");
+}
+
+function syncFieldRulesFromDOM() {
+  const cards = $$("#field-rules-list .entry-card");
+  cards.forEach((card, i) => {
+    if (fieldRuleEntries[i]) {
+      fieldRuleEntries[i].keywords = card.querySelector(".rule-keywords").value;
+      fieldRuleEntries[i].profileField = card.querySelector(".rule-field").value;
+      fieldRuleEntries[i].transform = card.querySelector(".rule-transform").value;
+    }
+  });
+}
+
+function collectFieldRulesFromDOM() {
+  syncFieldRulesFromDOM();
+  return fieldRuleEntries
+    .map((r) => ({ keywords: r.keywords.trim(), profileField: r.profileField.trim(), transform: r.transform || undefined }))
+    .filter((r) => r.keywords && r.profileField);
+}
+
+async function handleSaveRules() {
+  const rules = collectFieldRulesFromDOM();
+  try {
+    await saveFieldRules(rules);
+    setRulesStatus("success", "Field mapping rules saved.");
+    setTimeout(() => setRulesStatus("", ""), 3000);
+  } catch (err) {
+    log.error("Failed to save field rules:", err);
+    setRulesStatus("error", "Save failed: " + err.message);
+  }
+}
+
+async function handleResetRules() {
+  if (!confirm("Reset field mapping rules to the built-in defaults? Custom rules will be lost.")) return;
+  fieldRuleEntries = DEFAULT_FIELD_RULES.map((r) => ({ ...r }));
+  renderFieldRules();
+  await saveFieldRules(fieldRuleEntries);
+  setRulesStatus("success", "Reset to defaults.");
+  setTimeout(() => setRulesStatus("", ""), 3000);
+}
+
+function setRulesStatus(type, text) {
+  const el = $("#rules-save-status");
+  el.textContent = text;
+  el.className = "save-status" + (type ? " " + type : "");
 }
 
 /* ========== Navigation ========== */
