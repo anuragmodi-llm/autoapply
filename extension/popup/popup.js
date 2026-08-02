@@ -11,6 +11,8 @@ const $ = (sel) => document.querySelector(sel);
 const SUPPORTED_PATTERNS = [
   /^https:\/\/[^/]*\.greenhouse\.io\//,
   /^https:\/\/jobs\.lever\.co\//,
+  /^https:\/\/jobs\.ashbyhq\.com\//,
+  /^https:\/\/[^/]*\.myworkdayjobs\.com\//,
 ];
 
 document.addEventListener("DOMContentLoaded", init);
@@ -63,7 +65,7 @@ async function showReady() {
   $("#btn-autofill").disabled = !isSupported;
   $("#autofill-hint").textContent = isSupported
     ? "Ready to fill this application page."
-    : "Navigate to a Greenhouse or Lever application page to use Autofill.";
+    : "Navigate to a Greenhouse, Lever, Ashby, or Workday application page to use Autofill.";
 
   await updateUsageCounter();
 }
