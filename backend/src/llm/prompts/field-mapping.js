@@ -40,7 +40,7 @@ Rules:
 - Confidence is 0.0 to 1.0: 1.0 = exact match from profile, 0.7-0.9 = reasonable inference, below 0.6 = uncertain.
 - Match the language of the field label in your response.
 - Keep values concise and appropriate for the field type.
-- Return valid JSON matching the schema exactly.`;
+- Return ONLY a raw JSON object. No markdown fences, no prose before or after. No escape sequences other than \\n \\t \\r \\\\ \\" inside strings.`;
 
   const fieldsDesc = fields
     .map((f) => {

@@ -14,6 +14,45 @@ const SIMPLE_TYPES = new Set(["text", "email", "tel", "url", "number", "select",
 const MAX_CONCURRENT_COMPLEX = 5;
 const RATE_LIMIT_RETRY_DELAY_MS = 2000;
 
+/**
+ * Cleans up malformed JSON that free LLM models frequently produce:
+ * markdown code fences, leading prose, literal control characters inside
+ * strings, and invalid escape sequences like \a or \P.
+ */
+function sanitizeJson(raw) {
+  let s = raw.trim();
+
+  // Strip markdown code fences
+  s = s.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?\s*```\s*$/, "");
+  s = s.trim();
+
+  // Extract the JSON object/array if there's leading prose
+  const firstBrace = s.indexOf("{");
+  const firstBracket = s.indexOf("[");
+  let jsonStart = -1;
+  if (firstBrace >= 0 && firstBracket >= 0) jsonStart = Math.min(firstBrace, firstBracket);
+  else if (firstBrace >= 0) jsonStart = firstBrace;
+  else if (firstBracket >= 0) jsonStart = firstBracket;
+  if (jsonStart > 0) s = s.slice(jsonStart);
+
+  // Trim trailing non-JSON
+  const lastBrace = s.lastIndexOf("}");
+  const lastBracket = s.lastIndexOf("]");
+  const jsonEnd = Math.max(lastBrace, lastBracket);
+  if (jsonEnd > 0) s = s.slice(0, jsonEnd + 1);
+
+  // Replace literal control characters (0x00–0x1f) with escape sequences
+  s = s.replace(/[\x00-\x1f]/g, (ch) => {
+    const map = { "\n": "\\n", "\r": "\\r", "\t": "\\t", "\b": "\\b", "\f": "\\f" };
+    return map[ch] || "";
+  });
+
+  // Fix invalid JSON escape sequences: \X where X is not a valid JSON escape char
+  s = s.replace(/\\(?!["\\\/bfnrtu])/g, "\\\\");
+
+  return s;
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -77,20 +116,23 @@ async function callWithFallback({ messages, responseSchema }) {
 }
 
 /**
- * Parses JSON from LLM response, with one retry using a stricter prompt.
+ * Parses JSON from LLM response — sanitizes first, retries with a stricter
+ * prompt if it still fails.
  */
 async function parseWithRetry(content, messages, responseSchema) {
+  const sanitized = sanitizeJson(content);
   try {
-    return JSON.parse(content);
-  } catch {
-    console.warn("[LLM] JSON parse failed, retrying with strict prompt...");
+    return JSON.parse(sanitized);
+  } catch (firstErr) {
+    console.warn("[LLM] JSON parse failed after sanitize:", firstErr.message);
+    console.warn("[LLM] Sanitized content (first 500 chars):", sanitized.slice(0, 500));
     const strictMessages = [
       ...messages,
       { role: "assistant", content },
-      { role: "user", content: "Your response was not valid JSON. Respond with ONLY valid JSON matching the schema, no prose or markdown." },
+      { role: "user", content: "Your response was not valid JSON. Respond with ONLY a valid JSON object matching the schema. No markdown fences, no prose, no comments. Do not use special characters or escape sequences other than \\n \\t \\\" \\\\ inside strings." },
     ];
     const retry = await callWithFallback({ messages: strictMessages, responseSchema });
-    return JSON.parse(retry.content);
+    return JSON.parse(sanitizeJson(retry.content));
   }
 }
 

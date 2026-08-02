@@ -31,7 +31,7 @@ Rules:
 - If the profile has no relevant information for this question, set value to "SKIP" and confidence to 0.0.
 - Match the language of the field label.
 - Confidence is 0.0 to 1.0: 1.0 = answer directly from Q&A bank, 0.7-0.9 = synthesized from profile, below 0.6 = mostly generic.
-- Return valid JSON matching the schema exactly.`;
+- Return ONLY a raw JSON object. No markdown fences, no prose before or after. No escape sequences other than \\n \\t \\r \\\\ \\" inside strings.`;
 
   let user = `## User Profile
 ${JSON.stringify(profile, null, 2)}

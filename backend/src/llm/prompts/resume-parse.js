@@ -81,7 +81,7 @@ Rules:
 - Leave a field as an empty string ("") or empty array ([]) if not present in the resume.
 - For "role" in personal info, use the most recent job title.
 - Dates should be kept in whatever format the resume uses (e.g. "Jan 2022", "2022").
-- Return valid JSON matching the schema exactly.`;
+- Return ONLY a raw JSON object. No markdown fences, no prose before or after. No escape sequences other than \\n \\t \\r \\\\ \\" inside strings.`;
 
   const user = `## Resume Text
 ${resumeText}
