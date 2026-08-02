@@ -1,14 +1,21 @@
 /**
  * LLM router — reads config, loads the matching provider adapter,
- * splits fields into simple/complex batches, and merges results.
+ * splits fields into direct/simple/complex batches, and merges results.
  */
 
 import { LLM_CONFIG } from "./config.js";
+import { mapDirectFields } from "./direct-mapper.js";
 import { buildPrompt as buildFieldMapping } from "./prompts/field-mapping.js";
 import { buildPrompt as buildFreetextAnswer } from "./prompts/freetext-answer.js";
+import { buildPrompt as buildResumeParse } from "./prompts/resume-parse.js";
 
 const SIMPLE_TYPES = new Set(["text", "email", "tel", "url", "number", "select", "radio", "checkbox", "date"]);
 const MAX_CONCURRENT_COMPLEX = 5;
+const RATE_LIMIT_RETRY_DELAY_MS = 2000;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /**
  * Loads the provider adapter based on provider name.
@@ -27,7 +34,8 @@ async function loadProvider(provider) {
 }
 
 /**
- * Calls the LLM with automatic fallback on failure.
+ * Calls the LLM with automatic fallback on failure and one retry-after-delay
+ * per provider on rate limit (HTTP 429) responses.
  * @param {object} params - { messages, responseSchema }
  * @returns {Promise<{content: string, usage: object, provider: string, model: string}>}
  */
@@ -37,23 +45,34 @@ async function callWithFallback({ messages, responseSchema }) {
     { provider: LLM_CONFIG.fallback.provider, model: LLM_CONFIG.fallback.model },
   ];
 
+  let lastErr;
   for (let i = 0; i < configs.length; i++) {
     const { provider, model } = configs[i];
-    try {
-      const adapter = await loadProvider(provider);
-      const result = await adapter.complete({
-        model,
-        messages,
-        temperature: LLM_CONFIG.temperature,
-        maxTokens: LLM_CONFIG.maxTokens,
-        responseSchema,
-      });
-      return { ...result, provider, model };
-    } catch (err) {
-      if (i === configs.length - 1) throw err;
-      console.warn(`[LLM] Primary (${provider}/${model}) failed: ${err.message}. Trying fallback...`);
+    const adapter = await loadProvider(provider);
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const result = await adapter.complete({
+          model,
+          messages,
+          temperature: LLM_CONFIG.temperature,
+          maxTokens: LLM_CONFIG.maxTokens,
+          responseSchema,
+        });
+        return { ...result, provider, model };
+      } catch (err) {
+        lastErr = err;
+        const isRateLimit = /429/.test(err.message);
+        if (isRateLimit && attempt === 0) {
+          await sleep(RATE_LIMIT_RETRY_DELAY_MS);
+          continue;
+        }
+        console.warn(`[LLM] ${provider}/${model} failed: ${err.message}`);
+        break;
+      }
     }
   }
+  throw lastErr;
 }
 
 /**
@@ -75,19 +94,22 @@ async function parseWithRetry(content, messages, responseSchema) {
 }
 
 /**
- * Processes a batch of form fields through the LLM.
- * Splits into simple (batched) and complex (parallel) calls.
+ * Processes a batch of form fields.
+ * Fixed personal fields are mapped directly from the profile with no LLM
+ * call; everything else (dropdowns, radios, freetext) goes through the LLM.
  * @param {object} params
  * @param {Array<object>} params.fields
  * @param {object} params.profile
  * @param {object} [params.jobContext]
- * @returns {Promise<{fills: Array, errors: Array, meta: object}>}
+ * @returns {Promise<{fills: Array, errors: Array, meta: object, debug: Array}>}
  */
 export async function processFields({ fields, profile, jobContext }) {
+  const { directFills, remainingFields, debug: directDebug } = mapDirectFields(fields, profile);
+
   const simpleFields = [];
   const complexFields = [];
 
-  for (const field of fields) {
+  for (const field of remainingFields) {
     if (SIMPLE_TYPES.has(field.type) && field.type !== "textarea") {
       simpleFields.push(field);
     } else {
@@ -95,14 +117,17 @@ export async function processFields({ fields, profile, jobContext }) {
     }
   }
 
-  const fills = [];
+  const fills = [...directFills];
   const errors = [];
+  const debug = [...directDebug];
   let totalUsage = { prompt_tokens: 0, completion_tokens: 0 };
   let usedProvider = LLM_CONFIG.provider;
   let usedModel = LLM_CONFIG.model;
 
   // Batch simple fields into one call
   if (simpleFields.length > 0) {
+    const startedAt = Date.now();
+    const fieldIds = simpleFields.map((f) => f.id);
     try {
       const { system, user, schema } = buildFieldMapping(simpleFields, profile);
       const messages = [
@@ -121,11 +146,28 @@ export async function processFields({ fields, profile, jobContext }) {
         totalUsage.prompt_tokens += result.usage.prompt_tokens || 0;
         totalUsage.completion_tokens += result.usage.completion_tokens || 0;
       }
+      debug.push({
+        stage: "simple-batch",
+        fieldIds,
+        provider: result.provider,
+        model: result.model,
+        systemPrompt: system,
+        userPrompt: user,
+        rawResponse: result.content,
+        usage: result.usage,
+        latencyMs: Date.now() - startedAt,
+      });
     } catch (err) {
       console.error("[LLM] Simple fields batch failed:", err.message);
       for (const f of simpleFields) {
         errors.push({ id: f.id, message: `LLM error: ${err.message}` });
       }
+      debug.push({
+        stage: "simple-batch",
+        fieldIds,
+        error: err.message,
+        latencyMs: Date.now() - startedAt,
+      });
     }
   }
 
@@ -139,6 +181,7 @@ export async function processFields({ fields, profile, jobContext }) {
     for (const chunk of chunks) {
       const results = await Promise.allSettled(
         chunk.map(async (field) => {
+          const startedAt = Date.now();
           const { system, user, schema } = buildFreetextAnswer(field, profile, jobContext);
           const messages = [
             { role: "system", content: system },
@@ -152,6 +195,17 @@ export async function processFields({ fields, profile, jobContext }) {
             totalUsage.prompt_tokens += result.usage.prompt_tokens || 0;
             totalUsage.completion_tokens += result.usage.completion_tokens || 0;
           }
+          debug.push({
+            stage: "complex-field",
+            fieldIds: [field.id],
+            provider: result.provider,
+            model: result.model,
+            systemPrompt: system,
+            userPrompt: user,
+            rawResponse: result.content,
+            usage: result.usage,
+            latencyMs: Date.now() - startedAt,
+          });
           return parsed;
         })
       );
@@ -164,6 +218,11 @@ export async function processFields({ fields, profile, jobContext }) {
           const err = r.reason || new Error("Unknown error");
           console.error(`[LLM] Complex field "${chunk[i].id}" failed:`, err.message);
           errors.push({ id: chunk[i].id, message: `LLM error: ${err.message}` });
+          debug.push({
+            stage: "complex-field",
+            fieldIds: [chunk[i].id],
+            error: err.message,
+          });
         }
       }
     }
@@ -173,5 +232,37 @@ export async function processFields({ fields, profile, jobContext }) {
     fills,
     errors: errors.length > 0 ? errors : undefined,
     meta: { provider: usedProvider, model: usedModel, usage: totalUsage },
+    debug,
+  };
+}
+
+/**
+ * Extracts structured profile data (personal, experience, education, skills)
+ * from raw resume text via the LLM.
+ * @param {string} resumeText
+ * @returns {Promise<{profile: object, debug: object}>}
+ */
+export async function parseResume(resumeText) {
+  const startedAt = Date.now();
+  const { system, user, schema } = buildResumeParse(resumeText);
+  const messages = [
+    { role: "system", content: system },
+    { role: "user", content: user },
+  ];
+  const result = await callWithFallback({ messages, responseSchema: schema });
+  const parsed = await parseWithRetry(result.content, messages, schema);
+
+  return {
+    profile: parsed,
+    debug: {
+      stage: "resume-parse",
+      provider: result.provider,
+      model: result.model,
+      systemPrompt: system,
+      userPrompt: user,
+      rawResponse: result.content,
+      usage: result.usage,
+      latencyMs: Date.now() - startedAt,
+    },
   };
 }

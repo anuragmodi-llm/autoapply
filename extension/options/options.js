@@ -4,8 +4,10 @@
  * (experience, education, Q&A).
  */
 
-import { saveProfile, getProfile, clearProfile } from "../lib/storage.js";
+import { saveProfile, getProfile, clearProfile, saveResumeFile, getResumeFile, clearResumeFile } from "../lib/storage.js";
 import * as log from "../lib/logger.js";
+
+const BACKEND_URL = "https://autoapply-beryl.vercel.app";
 
 const DEFAULT_QA = [
   { question_pattern: "Why are you interested in this role?", answer: "" },
@@ -37,10 +39,14 @@ async function init() {
   $("#btn-export").addEventListener("click", handleExport);
   $("#btn-import").addEventListener("click", () => $("#import-file").click());
   $("#import-file").addEventListener("change", handleImport);
+  $("#resume-file").addEventListener("change", handleResumeUpload);
+  $("#btn-remove-resume").addEventListener("click", handleRemoveResume);
   setupNavigation();
 
   // Enable save button
   $("#btn-save").disabled = false;
+
+  showStoredResume(await getResumeFile().catch(() => null));
 
   // Load existing profile or start fresh
   try {
@@ -596,4 +602,154 @@ async function handleImport(e) {
     setSaveStatus("error", "Import failed: " + err.message);
   }
   e.target.value = "";
+}
+
+/* ========== Resume Upload & Parsing ========== */
+
+const RESUME_ACCEPTED_TYPES = {
+  "application/pdf": true,
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
+  "application/msword": true,
+  "text/plain": true,
+};
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Failed to read file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function setResumeStatus(type, text) {
+  const el = $("#resume-status");
+  el.textContent = text;
+  el.className = "resume-status" + (type ? " " + type : "");
+}
+
+function showStoredResume(resumeFile) {
+  const box = $("#resume-current");
+  if (!resumeFile) {
+    box.style.display = "none";
+    return;
+  }
+  box.style.display = "flex";
+  $("#resume-current-name").textContent = `📄 ${resumeFile.name} (uploaded ${new Date(resumeFile.uploadedAt).toLocaleDateString()})`;
+}
+
+async function handleResumeUpload(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  if (!RESUME_ACCEPTED_TYPES[file.type]) {
+    setResumeStatus("error", "Unsupported file type. Use PDF, DOC, DOCX, or TXT.");
+    e.target.value = "";
+    return;
+  }
+
+  try {
+    setResumeStatus("info", "Reading file...");
+    const dataUrl = await readFileAsDataUrl(file);
+    const fileBase64 = dataUrl.split(",")[1];
+
+    // Store the raw file immediately so auto-attach works even if parsing fails
+    await saveResumeFile({ name: file.name, mimeType: file.type, dataUrl });
+    showStoredResume(await getResumeFile());
+
+    setResumeStatus("info", "Parsing resume with AI — this may take a few seconds...");
+    const resp = await fetch(`${BACKEND_URL}/api/parse-resume`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fileBase64, mimeType: file.type, fileName: file.name }),
+    });
+
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({}));
+      throw new Error(body.message || `Server error ${resp.status}`);
+    }
+
+    const { profile: parsed } = await resp.json();
+    mergeParsedResume(parsed);
+
+    setResumeStatus(
+      "success",
+      `Parsed: ${parsed.experience?.length || 0} experience, ${parsed.education?.length || 0} education entries. Review the fields below, then click Save Profile.`
+    );
+  } catch (err) {
+    log.error("Resume upload/parse failed:", err);
+    setResumeStatus("error", "Parsing failed: " + err.message + " — resume file is still saved for auto-attach.");
+  } finally {
+    e.target.value = "";
+  }
+}
+
+async function handleRemoveResume() {
+  if (!confirm("Remove the stored resume file?")) return;
+  try {
+    await clearResumeFile();
+    showStoredResume(null);
+    setResumeStatus("", "");
+  } catch (err) {
+    log.error("Failed to remove resume:", err);
+    setResumeStatus("error", "Failed to remove: " + err.message);
+  }
+}
+
+/**
+ * Merges parsed resume data into the current form: fills empty personal
+ * fields, appends new experience/education entries, and unions skills —
+ * never overwrites data the user already entered.
+ */
+function mergeParsedResume(parsed) {
+  if (parsed.personal) {
+    const fieldMap = {
+      "#personal-name": parsed.personal.name,
+      "#personal-email": parsed.personal.email,
+      "#personal-phone": parsed.personal.phone,
+      "#personal-location": parsed.personal.location,
+      "#personal-linkedin": parsed.personal.linkedin,
+      "#personal-github": parsed.personal.github,
+      "#personal-portfolio": parsed.personal.portfolio,
+      "#personal-company": parsed.personal.company,
+      "#personal-role": parsed.personal.role,
+    };
+    for (const [sel, value] of Object.entries(fieldMap)) {
+      const input = $(sel);
+      if (input && !input.value.trim() && value) input.value = value;
+    }
+  }
+
+  if (parsed.experience?.length) {
+    syncExperienceFromDOM();
+    experienceEntries.push(...parsed.experience.map((e) => ({ ...e, achievements: e.achievements || [] })));
+    renderExperienceEntries();
+  }
+
+  if (parsed.education?.length) {
+    syncEducationFromDOM();
+    educationEntries.push(...parsed.education);
+    renderEducationEntries();
+  }
+
+  if (parsed.skills) {
+    mergeSkillsField("#skills-technical", parsed.skills.technical);
+    mergeSkillsField("#skills-soft", parsed.skills.soft);
+    mergeSkillsField("#skills-tools", parsed.skills.tools);
+    mergeSkillsField("#skills-languages", parsed.skills.languages);
+  }
+}
+
+function mergeSkillsField(selector, newSkills) {
+  if (!newSkills?.length) return;
+  const input = $(selector);
+  const existing = new Set(parseCSV(input.value).map((s) => s.toLowerCase()));
+  const merged = parseCSV(input.value);
+  for (const skill of newSkills) {
+    if (!existing.has(skill.toLowerCase())) {
+      merged.push(skill);
+      existing.add(skill.toLowerCase());
+    }
+  }
+  input.value = merged.join(", ");
 }

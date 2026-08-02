@@ -24,6 +24,10 @@ async function init() {
     chrome.runtime.openOptionsPage();
     window.close();
   });
+  $("#btn-view-logs").addEventListener("click", () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL("logs/logs.html") });
+    window.close();
+  });
   $("#btn-autofill").addEventListener("click", handleAutofill);
 
   try {

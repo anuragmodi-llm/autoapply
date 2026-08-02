@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoApply — Performance Logs</title>
+  <link rel="stylesheet" href="logs.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="header-left">
+        <h1 class="logo">AutoApply</h1>
+        <span class="badge">Performance Logs</span>
+      </div>
+      <div class="header-right">
+        <button id="btn-refresh" class="btn btn-secondary">Refresh</button>
+        <button id="btn-clear" class="btn btn-danger-outline">Clear Logs</button>
+      </div>
+    </header>
+
+    <main class="content">
+      <section class="stats-grid" id="stats-grid"></section>
+
+      <section class="runs-section">
+        <h2>Recent Runs</h2>
+        <div id="runs-list" class="runs-list"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="logs.js" type="module"></script>
+</body>
+</html>

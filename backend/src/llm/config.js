@@ -10,6 +10,8 @@ export const LLM_CONFIG = {
   maxTokens: 1024,
   fallback: {
     provider: "openrouter",
-    model: "google/gemma-4-31b-it:free",
+    // Different upstream pool (Nvidia, not Google) so a Google-side
+    // rate limit on the primary doesn't take down the fallback too.
+    model: "nvidia/nemotron-3-nano-30b-a3b:free",
   },
 };

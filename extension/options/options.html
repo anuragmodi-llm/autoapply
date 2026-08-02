@@ -25,7 +25,8 @@
 
     <div class="profile-form">
       <nav class="sidebar">
-        <a href="#section-personal" class="nav-link active" data-section="personal">Personal</a>
+        <a href="#section-resume" class="nav-link active" data-section="resume">Resume</a>
+        <a href="#section-personal" class="nav-link" data-section="personal">Personal</a>
         <a href="#section-experience" class="nav-link" data-section="experience">Experience</a>
         <a href="#section-education" class="nav-link" data-section="education">Education</a>
         <a href="#section-skills" class="nav-link" data-section="skills">Skills</a>
@@ -34,6 +35,23 @@
       </nav>
 
       <main class="content">
+        <!-- RESUME -->
+        <section id="section-resume" class="section">
+          <h2>Resume</h2>
+          <p class="section-desc">Upload your resume once. AutoApply will parse it to pre-fill the fields below, and auto-attach the same file to "Resume" upload fields during autofill.</p>
+          <div class="grid-1">
+            <div class="field">
+              <label for="resume-file">Resume File (PDF, DOC, DOCX, or TXT)</label>
+              <input type="file" id="resume-file" accept=".pdf,.doc,.docx,.txt">
+            </div>
+            <div id="resume-current" class="resume-current" style="display:none">
+              <span id="resume-current-name"></span>
+              <button id="btn-remove-resume" class="btn btn-danger-outline btn-sm">Remove</button>
+            </div>
+            <div id="resume-status" class="resume-status"></div>
+          </div>
+        </section>
+
         <!-- PERSONAL -->
         <section id="section-personal" class="section">
           <h2>Personal Information</h2>

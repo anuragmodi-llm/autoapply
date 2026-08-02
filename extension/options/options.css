@@ -328,6 +328,27 @@ body {
   margin-bottom: 16px;
 }
 
+.resume-current {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--gray-50, #f9fafb);
+  border: 1px solid var(--gray-200, #e5e7eb);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.resume-status {
+  font-size: 13px;
+  min-height: 18px;
+}
+
+.resume-status.success { color: #16a34a; }
+.resume-status.error { color: #ef4444; }
+.resume-status.info { color: var(--gray-500); }
+
 /* Grid layouts */
 .grid-2 {
   display: grid;

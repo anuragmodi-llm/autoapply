@@ -7,6 +7,7 @@
 import * as log from "./logger.js";
 
 const STORAGE_KEY = "autoapply_profile";
+const RESUME_KEY = "autoapply_resume_file";
 
 /**
  * Saves the user profile to local storage.
@@ -41,4 +42,31 @@ export async function hasProfile() {
 export async function clearProfile() {
   await chrome.storage.local.remove(STORAGE_KEY);
   log.info("Profile cleared.");
+}
+
+/**
+ * Saves the resume file (as a data URL) for later parsing and auto-attach
+ * on file-upload form fields.
+ * @param {{ name: string, mimeType: string, dataUrl: string }} file
+ */
+export async function saveResumeFile(file) {
+  await chrome.storage.local.set({ [RESUME_KEY]: { ...file, uploadedAt: Date.now() } });
+  log.info("Resume file saved:", file.name);
+}
+
+/**
+ * Retrieves the stored resume file.
+ * @returns {Promise<object|null>}
+ */
+export async function getResumeFile() {
+  const result = await chrome.storage.local.get(RESUME_KEY);
+  return result[RESUME_KEY] || null;
+}
+
+/**
+ * Deletes the stored resume file.
+ */
+export async function clearResumeFile() {
+  await chrome.storage.local.remove(RESUME_KEY);
+  log.info("Resume file cleared.");
 }

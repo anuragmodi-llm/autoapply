@@ -8,13 +8,14 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import fillRoute from "./routes/fill.js";
+import parseResumeRoute from "./routes/parse-resume.js";
 
 export async function createApp({ pretty = false } = {}) {
   const loggerConfig = pretty
     ? { level: "info", transport: { target: "pino-pretty", options: { translateTime: "HH:MM:ss", ignore: "pid,hostname" } } }
     : { level: "info" };
 
-  const app = Fastify({ logger: loggerConfig });
+  const app = Fastify({ logger: loggerConfig, bodyLimit: 10 * 1024 * 1024 });
 
   await app.register(cors, { origin: true });
 
@@ -30,6 +31,7 @@ export async function createApp({ pretty = false } = {}) {
   app.get("/health", async () => ({ status: "ok" }));
 
   await app.register(fillRoute);
+  await app.register(parseResumeRoute);
 
   return app;
 }

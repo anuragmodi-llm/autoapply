@@ -67,6 +67,7 @@ export default async function fillRoute(app) {
       return {
         fills: result.fills,
         errors: result.errors,
+        debug: result.debug,
       };
     } catch (err) {
       request.log.error(`Fill failed: ${err.message}`);

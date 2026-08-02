@@ -14,6 +14,8 @@
   const OVERLAY_ID = "autoapply-overlay";
   const MAX_DYNAMIC_ROUNDS = 3;
   const MAX_BACKOFF_RETRIES = 3;
+  const MAX_RUN_LOGS = 30;
+  const RUN_LOGS_KEY = "autoapply_logs";
 
   let fillInProgress = false;
   let abortController = null;
@@ -212,13 +214,13 @@
     el.dispatchEvent(new Event("blur", { bubbles: true }));
   }
 
-  async function fillField(selector, value, fieldType) {
+  async function fillField(selector, value, fieldType, resumeFile) {
     if (value === "SKIP") return { status: "skipped", message: "No matching profile value" };
     const el = document.querySelector(selector);
     if (!el) return { status: "error", message: `Element not found: ${selector}` };
     try {
       switch (fieldType) {
-        case "file": return { status: "skipped", message: "Please attach file manually" };
+        case "file": return await fillFileInput(el, resumeFile);
         case "select": return el.tagName.toLowerCase() === "select" ? fillNativeSelect(el, value) : await fillCustomDropdown(el, value);
         case "radio": return fillRadio(el, value);
         case "checkbox": return fillCheckbox(el, value);
@@ -231,6 +233,23 @@
         default: await typeText(el, value, 30, 80); return { status: "filled" };
       }
     } catch (err) { return { status: "error", message: err.message }; }
+  }
+
+  async function fillFileInput(el, resumeFile) {
+    if (!resumeFile) return { status: "skipped", message: "No resume on file — attach manually or upload one in options" };
+    try {
+      const resp = await fetch(resumeFile.dataUrl);
+      const blob = await resp.blob();
+      const file = new File([blob], resumeFile.name, { type: resumeFile.mimeType });
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      el.files = dt.files;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+      return { status: "filled", message: `Attached: ${resumeFile.name}` };
+    } catch (err) {
+      return { status: "error", message: `Failed to attach resume: ${err.message}` };
+    }
   }
 
   function fillNativeSelect(el, value) {
@@ -400,6 +419,16 @@
     throw lastErr || new Error("Request failed after retries.");
   }
 
+  /* ========== Run Log Persistence (for the Performance Logs page) ========== */
+
+  async function saveRunLog(entry) {
+    const result = await chrome.storage.local.get(RUN_LOGS_KEY);
+    const logs = result[RUN_LOGS_KEY] || [];
+    logs.unshift(entry);
+    if (logs.length > MAX_RUN_LOGS) logs.length = MAX_RUN_LOGS;
+    await chrome.storage.local.set({ [RUN_LOGS_KEY]: logs });
+  }
+
   /* ========== Job Context Extraction ========== */
 
   function extractJobContext() {
@@ -425,9 +454,10 @@
     try {
       if (!navigator.onLine) throw new Error("You're offline — connect to the internet and try again.");
 
-      const result = await chrome.storage.local.get("autoapply_profile");
+      const result = await chrome.storage.local.get(["autoapply_profile", "autoapply_resume_file"]);
       const profile = result.autoapply_profile;
       if (!profile) throw new Error("Profile not found. Set up your profile in the extension options.");
+      const resumeFile = result.autoapply_resume_file || null;
 
       const trimmedProfile = { ...profile };
       if (trimmedProfile.experience?.length > 5) trimmedProfile.experience = trimmedProfile.experience.slice(0, 5);
@@ -436,9 +466,11 @@
       const adapter = detectAdapter();
       log.info(`Adapter: ${adapter.name}`);
 
-      // Track all filled field IDs across dynamic rounds
+      // Track all field IDs already attempted (filled OR errored) across dynamic rounds
       const allFilledIds = new Set();
       let totalFilled = 0, totalSkipped = 0, totalReview = 0, totalErrors = 0;
+      const runDebugCalls = [];
+      const runStartedAt = Date.now();
 
       for (let round = 0; round < MAX_DYNAMIC_ROUNDS; round++) {
         const fields = extractFields(adapter, allFilledIds);
@@ -456,13 +488,34 @@
 
         for (const f of fields) updateFieldUI(f.id, f.label, "pending");
 
+        // File inputs (resume/cover letter attach) never need the LLM —
+        // handle them locally so we don't waste an AI call on an "Attach" button.
+        const fileFields = fields.filter((f) => f.type === "file");
+        const llmFields = fields.filter((f) => f.type !== "file");
+
+        for (const f of fileFields) {
+          allFilledIds.add(f.id);
+          updateFieldUI(f.id, f.label, "filling");
+          const res = await fillField(f.id, "ATTACH", "file", resumeFile);
+          if (res.status === "filled") { updateFieldUI(f.id, f.label, "filled", res.message); totalFilled++; }
+          else if (res.status === "skipped") { updateFieldUI(f.id, f.label, "skipped", res.message); totalSkipped++; }
+          else { updateFieldUI(f.id, f.label, "error", res.message); totalErrors++; }
+        }
+
+        if (llmFields.length === 0) {
+          if (round < MAX_DYNAMIC_ROUNDS - 1) { await sleep(500); const newFields = extractFields(adapter, allFilledIds); if (newFields.length === 0) break; }
+          continue;
+        }
+
         const jobContext = extractJobContext();
         const apiResult = await requestFill(
-          { fields, profile: trimmedProfile, jobContext },
+          { fields: llmFields, profile: trimmedProfile, jobContext },
           abortController.signal
         );
 
         if (!apiResult?.fills) throw new Error("Backend returned invalid response.");
+
+        if (apiResult.debug) runDebugCalls.push(...apiResult.debug);
 
         const errorMap = new Map();
         if (apiResult.errors) for (const e of apiResult.errors) errorMap.set(e.id, e.message);
@@ -487,7 +540,7 @@
             value = value.slice(0, field.maxLength - 10) + "...";
           }
 
-          const res = await fillField(fill.id, value, field?.type || "text");
+          const res = await fillField(fill.id, value, field?.type || "text", resumeFile);
 
           if (res.status === "filled" && fill.confidence < 0.6) {
             updateFieldUI(fill.id, label, "review", `Low confidence (${Math.round(fill.confidence * 100)}%)`);
@@ -498,7 +551,11 @@
           else { updateFieldUI(fill.id, label, "error", res.message); totalErrors++; }
         }
 
+        // Fields that errored out at the LLM level never got a "fill" entry —
+        // mark them as attempted too, or they'd be re-sent to the LLM every
+        // dynamic round and keep hammering a rate-limited model.
         for (const [id, msg] of errorMap) {
+          allFilledIds.add(id);
           if (!apiResult.fills.some(f => f.id === id)) {
             updateFieldUI(id, id, "error", msg); totalErrors++;
           }
@@ -524,6 +581,19 @@
       }
 
       setOverlayStatus(`Done: ${totalFilled} filled, ${totalSkipped} skipped, ${totalReview} review, ${totalErrors} errors`);
+
+      try {
+        await saveRunLog({
+          timestamp: runStartedAt,
+          url: window.location.href,
+          adapter: adapter.name,
+          totalFilled, totalSkipped, totalReview, totalErrors,
+          durationMs: Date.now() - runStartedAt,
+          calls: runDebugCalls,
+        });
+      } catch (logErr) {
+        log.warn("Failed to save run log:", logErr.message);
+      }
 
       // Multi-page form detection
       const nextBtn = document.querySelector(
