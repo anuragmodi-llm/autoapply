@@ -5,7 +5,7 @@
 
 export const LLM_CONFIG = {
   provider: process.env.LLM_PROVIDER || "openrouter",
-  model: process.env.LLM_MODEL || "qwen/qwen3.7-flash",
+  model: process.env.LLM_MODEL || "google/gemma-4-26b-a4b-it:free",
   temperature: 0.2,
   maxTokens: 1024,
   fallback: {
